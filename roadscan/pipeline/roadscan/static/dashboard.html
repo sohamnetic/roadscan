@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RoadScan Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+  :root { --bg:#ffffff; --fg:#1d232b; --muted:#5f6b7a; --line:#e3e7ec; --panel:#f7f8fa; --accent:#1d4ed8;
+          --confirmed:#d1352b; --open:#e8912d; --likely:#3a7bd5; --fixed:#2e9a5b; --dismissed:#8a94a3; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14181d; --fg:#e8ecf1; --muted:#9aa6b4; --line:#2a313a; --panel:#1b2027; --accent:#7aa2ff; } }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--fg); display:flex; height:100vh; }
+  aside { width:380px; flex:none; overflow:auto; border-right:1px solid var(--line); background:var(--panel); padding:16px; }
+  #map { flex:1; position:relative; }
+  h1 { font-size:17px; margin:0; } .sub { color:var(--muted); margin:2px 0 12px; font-size:12px; }
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:12px; }
+  .stat { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 8px; }
+  .stat b { display:block; font-size:18px; } .stat span { color:var(--muted); font-size:11px; }
+  .filters { display:grid; gap:6px; margin-bottom:10px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  select, input[type=file], button { font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:4px 8px; }
+  button { cursor:pointer; } button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  label.chk { display:inline-flex; gap:4px; align-items:center; font-size:12px; cursor:pointer; }
+  .dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .tabs { display:flex; gap:4px; margin:6px 0 10px; border-bottom:1px solid var(--line); }
+  .tabs button { border:0; border-bottom:2px solid transparent; border-radius:0; background:none; padding:6px 8px; color:var(--muted); }
+  .tabs button.on { color:var(--fg); border-bottom-color:var(--accent); }
+  ol { list-style:none; margin:0; padding:0; }
+  li.item { padding:8px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; background:var(--bg); cursor:pointer; }
+  li.item:hover { border-color:var(--muted); } .meta { color:var(--muted); font-size:12px; }
+  table { border-collapse:collapse; width:100%; font-size:12px; } th,td { padding:5px 4px; border-bottom:1px solid var(--line); text-align:left; }
+  td.n { text-align:right; } tr.ward { cursor:pointer; } tr.ward:hover td { background:var(--bg); }
+  a { color:var(--accent); }
+  #detail { position:absolute; top:12px; right:12px; width:320px; max-height:calc(100% - 24px); overflow:auto; background:var(--bg); color:var(--fg);
+            border:1px solid var(--line); border-radius:10px; padding:12px; box-shadow:0 4px 18px rgba(0,0,0,.18); z-index:2; }
+  #detail[hidden] { display:none; } #detail h2 { font-size:15px; margin:0 0 6px; } .x { float:right; }
+  .jobs li { font-size:12px; padding:6px 0; border-bottom:1px solid var(--line); }
+  .muted { color:var(--muted); } [hidden] { display:none !important; }
+  @media (max-width: 760px) { body { flex-direction:column; } aside { width:100%; height:48vh; border-right:0; border-bottom:1px solid var(--line); }
+    #detail { width:auto; left:12px; } }
+</style>
+</head>
+<body>
+<aside>
+  <h1>RoadScan</h1>
+  <p class="sub" id="asof">Loading…</p>
+  <div class="stats" id="stats"></div>
+  <div class="filters">
+    <div class="row" id="statuses"></div>
+    <div class="row">
+      <select id="ward" hidden><option value="">All wards</option></select>
+      <select id="sev"><option value="0">Any severity</option><option value="3">Severity 3+</option><option value="4">Severity 4+</option></select>
+    </div>
+  </div>
+  <div class="tabs" role="tablist">
+    <button class="on" data-tab="priority">Priority</button>
+    <button data-tab="wards" id="wardsTab" hidden>Wards</button>
+    <button data-tab="upload">Upload &amp; export</button>
+  </div>
+  <section id="tab-priority"><ol id="list"></ol></section>
+  <section id="tab-wards" hidden>
+    <table><thead><tr><th>Ward</th><th class="n">Open</th><th class="n">Sev 4–5</th><th class="n">&gt;30 d</th><th class="n">Oldest</th><th></th></tr></thead><tbody id="wardRows"></tbody></table>
+  </section>
+  <section id="tab-upload" hidden>
+    <p class="meta">Upload a ride: a .zip of one session folder (meta.json, gps.csv, imu.csv, and detections.csv or video.mp4).</p>
+    <form id="up" class="row"><input type="file" id="file" accept=".zip" required><button class="primary">Upload</button></form>
+    <ol class="jobs" id="jobs"></ol>
+    <p class="meta" style="margin-top:14px">Export (current ward filter applies):</p>
+    <div class="row">
+      <a id="xcsv" href="/api/export/potholes.csv">Defects CSV</a>
+      <a id="xgeo" href="/api/export/potholes.geojson">GeoJSON (GIS)</a>
+      <a href="/api/export/wards.csv">Ward summary CSV</a>
+      <a id="xwo" href="/workorder" target="_blank" rel="noopener">Work order (print)</a>
+    </div>
+  </section>
+</aside>
+<div id="map">
+  <div id="detail" hidden></div>
+</div>
+<script>
+const STATUS = {
+  confirmed:      { label: "Confirmed",      color: "var(--confirmed)", hex: "#d1352b", on: true },
+  open:           { label: "Seen once",      color: "var(--open)",      hex: "#e8912d", on: true },
+  likely_fixed:   { label: "Likely fixed",   color: "var(--likely)",    hex: "#3a7bd5", on: false },
+  verified_fixed: { label: "Verified fixed", color: "var(--fixed)",     hex: "#2e9a5b", on: false },
+  dismissed:      { label: "Dismissed",      color: "var(--dismissed)", hex: "#8a94a3", on: false },
+};
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const fmt = (c) => esc(String(c).replace(/_/g, " "));
+const place = (p) => [p.road, p.ward && `ward ${p.ward}`].filter(Boolean).map(esc).join(" · ");
+const getJSON = async (url, opts) => { const r = await fetch(url, opts); if (!r.ok) throw new Error(await r.text()); return r.json(); };
+
+const state = { ward: "", sev: 0, statuses: new Set(Object.keys(STATUS).filter((k) => STATUS[k].on)), data: null, fitted: false };
+
+for (const [key, s] of Object.entries(STATUS)) {
+  const l = document.createElement("label");
+  l.className = "chk";
+  l.innerHTML = `<input type="checkbox" ${s.on ? "checked" : ""}><span class="dot" style="background:${s.color}"></span>${s.label}`;
+  l.querySelector("input").addEventListener("change", (e) => { e.target.checked ? state.statuses.add(key) : state.statuses.delete(key); refresh(); });
+  $("statuses").appendChild(l);
+}
+$("ward").addEventListener("change", (e) => { state.ward = e.target.value; state.fitted = false; refresh(); });
+$("sev").addEventListener("change", (e) => { state.sev = +e.target.value; refresh(); });
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("on", x === b));
+  for (const t of ["priority", "wards", "upload"]) $("tab-" + t).hidden = t !== b.dataset.tab;
+}));
+
+const map = new maplibregl.Map({
+  container: "map",
+  style: { version: 8, sources: { osm: { type: "raster", tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], tileSize: 256,
+           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' } },
+           layers: [{ id: "osm", type: "raster", source: "osm" }] },
+  center: [77.59, 12.97], zoom: 11,
+});
+map.addControl(new maplibregl.NavigationControl(), "bottom-right");
+// The canvas can be sized before layout settles (embedded panes, slow CSS): keep it matched to its box.
+new ResizeObserver(() => map.resize()).observe($("map"));
+const mapReady = new Promise((ok) => map.on("load", () => { map.resize(); ok(); }));
+
+function query() {
+  const q = new URLSearchParams({ status: [...state.statuses].join(","), min_severity: state.sev });
+  if (state.ward) q.set("ward", state.ward);
+  return q;
+}
+
+async function refresh() {
+  const [data, summary] = await Promise.all([getJSON("/api/potholes?" + query()), getJSON("/api/summary")]);
+  state.data = data;
+  $("asof").textContent = summary.latest ? `${summary.rides} rides · ${summary.km} km · latest ${summary.latest.slice(0, 16).replace("T", " ")} UTC` : "No rides yet";
+  $("stats").innerHTML = [
+    [summary.open, "open defects"], [summary.severe, "severity 4–5"], [summary.fixed, "fixed"],
+    [summary.aging.over_30, "open > 30 days"], [summary.aging.over_60, "open > 60 days"], [summary.aging.over_90, "open > 90 days"],
+  ].map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join("");
+
+  const list = $("list");
+  list.innerHTML = "";
+  const active = data.features.filter((f) => ["open", "confirmed"].includes(f.properties.status)).slice(0, 50);
+  if (!active.length) list.innerHTML = `<li class="muted">No open defects for this filter.</li>`;
+  for (const f of active) {
+    const p = f.properties, li = document.createElement("li");
+    li.className = "item";
+    li.innerHTML = `<b>#${p.id} ${fmt(p.cls)}</b> · severity ${p.severity}/5<div class="meta">${place(p) ? place(p) + "<br>" : ""}` +
+      `${Math.round(p.days_open)} days open · ${p.n_sessions} ride(s) · priority ${p.priority}</div>`;
+    li.addEventListener("click", () => select(p.id, f.geometry.coordinates));
+    list.appendChild(li);
+  }
+
+  const wardParam = state.ward ? "?ward=" + encodeURIComponent(state.ward) : "";
+  $("xcsv").href = "/api/export/potholes.csv" + wardParam;
+  $("xgeo").href = "/api/export/potholes.geojson" + wardParam;
+  $("xwo").href = "/workorder" + wardParam;
+
+  if (summary.has_wards) await refreshWards();
+
+  await mapReady;
+  if (map.getSource("defects")) map.getSource("defects").setData(data);
+  else addLayers(data);
+  if (!state.fitted && data.features.length) {
+    const b = new maplibregl.LngLatBounds();
+    data.features.forEach((f) => b.extend(f.geometry.coordinates));
+    map.fitBounds(b, { padding: 40, maxZoom: 17, duration: 0 });
+    state.fitted = true;
+  }
+}
+
+async function refreshWards() {
+  const rows = await getJSON("/api/wards");
+  $("wardsTab").hidden = false;
+  const sel = $("ward");
+  if (sel.options.length === 1) {
+    sel.hidden = false;
+    for (const r of [...rows].sort((a, b) => String(a.ward).localeCompare(String(b.ward)))) sel.add(new Option(r.ward, r.ward));
+  }
+  $("wardRows").innerHTML = rows.map((r) =>
+    `<tr class="ward" data-ward="${esc(r.ward)}"><td>${esc(r.ward)}</td><td class="n">${r.open}</td><td class="n">${r.severity_4_5}</td>` +
+    `<td class="n">${r.open_over_30_days}</td><td class="n">${Math.round(r.oldest_days)} d</td>` +
+    `<td><a href="/workorder?ward=${encodeURIComponent(r.ward)}" target="_blank" rel="noopener">order</a></td></tr>`).join("");
+  document.querySelectorAll("tr.ward").forEach((tr) => tr.addEventListener("click", (e) => {
+    if (e.target.tagName === "A") return;
+    state.ward = tr.dataset.ward; $("ward").value = state.ward; state.fitted = false; refresh();
+  }));
+}
+
+function addLayers(data) {
+  map.addSource("defects", { type: "geojson", data });
+  const color = ["match", ["get", "status"], ...Object.entries(STATUS).flatMap(([k, s]) => [k, s.hex]), "#e8912d"];
+  map.addLayer({ id: "defects", type: "circle", source: "defects", paint: {
+    "circle-color": color, "circle-opacity": 0.6, "circle-stroke-color": color, "circle-stroke-width": 2,
+    "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, ["+", 2, ["get", "severity"]], 17, ["+", 4, ["*", 2, ["get", "severity"]]]],
+  } });
+  map.on("click", "defects", (e) => { const f = e.features[0]; select(f.properties.id, f.geometry.coordinates); });
+  map.on("mouseenter", "defects", () => (map.getCanvas().style.cursor = "pointer"));
+  map.on("mouseleave", "defects", () => (map.getCanvas().style.cursor = ""));
+}
+
+async function select(id, coords) {
+  map.easeTo({ center: coords, zoom: Math.max(map.getZoom(), 17) });
+  const d = await getJSON(`/api/potholes/${id}`);
+  const p = d.properties, [lon, lat] = d.geometry.coordinates;
+  const obs = d.observations.map((o) => `<tr><td>${esc(String(o.seen_at).slice(0, 10))}</td><td>${esc(o.source)}</td>` +
+    `<td class="n">${o.max_conf == null ? "–" : (+o.max_conf).toFixed(2)}</td><td class="n">${o.jolt_strength == null ? "–" : (+o.jolt_strength).toFixed(1)}</td></tr>`).join("");
+  const canFix = ["open", "confirmed", "likely_fixed"].includes(p.status);
+  const panel = $("detail");
+  panel.innerHTML = `<button class="x" aria-label="Close">✕</button><h2>#${p.id} ${fmt(p.cls)}</h2>` +
+    `<div class="meta">${place(p)}</div>` +
+    `<p>${esc((STATUS[p.status] || STATUS.open).label)} · severity ${p.severity}/5 · priority ${p.priority}<br>` +
+    `First seen ${esc(String(p.first_seen).slice(0, 10))} (${Math.round(p.days_open)} days) · ${p.n_sessions} ride(s), missed ${p.misses}` +
+    `${p.area_m2 ? `<br>About ${(+p.area_m2).toFixed(2)} m²` : ""}</p>` +
+    `<p><a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" rel="noopener">Open in Google Maps</a></p>` +
+    `<table><thead><tr><th>Seen</th><th>By</th><th class="n">Conf</th><th class="n">Jolt</th></tr></thead><tbody>${obs}</tbody></table>` +
+    (canFix ? `<p><button class="primary" id="fixBtn">Mark repaired (site-checked)</button></p>` : "");
+  panel.hidden = false;
+  panel.querySelector(".x").addEventListener("click", () => (panel.hidden = true));
+  if (canFix) $("fixBtn").addEventListener("click", async () => {
+    if (!confirm(`Mark #${p.id} as repaired? Only do this after checking the site.`)) return;
+    await getJSON(`/api/potholes/${p.id}/fix`, { method: "POST" });
+    panel.hidden = true;
+    refresh();
+  });
+}
+
+$("up").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = $("file").files[0];
+  if (!f) return;
+  const body = new FormData();
+  body.append("file", f);
+  try { await getJSON("/api/sessions", { method: "POST", body }); } catch (err) { alert(err.message); }
+  $("file").value = "";
+  pollJobs();
+});
+
+async function pollJobs() {
+  const jobs = await getJSON("/api/jobs");
+  $("jobs").innerHTML = jobs.map((j) => `<li><b>${esc(j.file)}</b> · ${esc(j.state)}<div class="meta">${esc(j.message)}</div></li>`).join("");
+  if (jobs.some((j) => !["done", "failed"].includes(j.state))) setTimeout(pollJobs, 2000);
+  else if (jobs.length) refresh();
+}
+
+refresh().catch((e) => ($("asof").textContent = "Could not load: " + e.message));
+pollJobs();
+</script>
+</body>
+</html>

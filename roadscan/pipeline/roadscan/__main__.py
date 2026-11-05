@@ -10,22 +10,17 @@ DEFAULT_DB = "roadscan.db"
 
 
 def _process(args) -> None:
-    from .fusion import FusionConfig, fuse, load_config
-    from .geo import Track
-    from .imu import detect_jolts
+    from .fusion import FusionConfig, load_config
     from .registry import Registry
-    from .session import load_session
+    from .service import process_session
 
     config = load_config(args.config) if args.config else FusionConfig()
+    roads = Path(args.places) / "roads.geojson" if args.places else None
+    if roads is not None and not roads.exists():
+        raise FileNotFoundError(f"{roads} not found (run `roadscan osm --bbox ...` first)")
     with Registry(args.db) as registry:
         for path in args.sessions:
-            session = load_session(path)
-            jolts = detect_jolts(session.imu, Track(session.gps), session.vehicle_type)
-            candidates = fuse(session, jolts, config)
-            candidates.to_csv(Path(path) / "candidates.csv", index=False)
-            summary = registry.ingest(session, candidates)
-            confirmed = int(candidates["confirmed"].sum())
-            print(f"{session.session_id}: {len(jolts)} jolts, {len(candidates)} candidates, {confirmed} confirmed -> {summary}")
+            print(process_session(path, registry, config, roads)["message"])
 
 
 def _map(args) -> None:
@@ -110,6 +105,20 @@ def _blur(args) -> None:
     print(f"wrote {stats['out']}: {stats['frames']} frames, {stats['boxes']} people/vehicles hidden")
 
 
+def _serve(args) -> None:
+    import uvicorn
+
+    from .api import create_app
+    from .fusion import FusionConfig, load_config
+
+    config = load_config(args.config) if args.config else FusionConfig()
+    app = create_app(args.db, places=args.places, config=config, uploads=args.uploads, weights=args.weights)
+    if args.host not in ("127.0.0.1", "localhost"):
+        print("warning: no logins yet; anyone who can reach this address can upload rides and close defects")
+    print(f"dashboard: http://{args.host}:{args.port}/")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="roadscan", description="Road-damage mapping pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -118,6 +127,7 @@ def main(argv=None) -> int:
     p.add_argument("sessions", nargs="+", help="session folders, oldest first")
     p.add_argument("--db", default=DEFAULT_DB)
     p.add_argument("--config", help="JSON of FusionConfig overrides, e.g. models/<model>.fusion.json")
+    p.add_argument("--places", help="folder from `roadscan osm`: snap each ride's GPS onto its roads first")
     p.set_defaults(func=_process)
 
     p = sub.add_parser("map", help="write an HTML map (and optionally CSV/GeoJSON) from the registry")
@@ -170,6 +180,16 @@ def main(argv=None) -> int:
     p.add_argument("--out", help="default: <video>_blurred.mp4 next to the input")
     p.add_argument("--conf", type=float, default=0.2, help="low on purpose: a missed face costs more than extra blur")
     p.set_defaults(func=_blur)
+
+    p = sub.add_parser("serve", help="run the dashboard and API (uploads, ward views, work orders)")
+    p.add_argument("--db", default=DEFAULT_DB)
+    p.add_argument("--places", help="folder from `roadscan osm`: road/ward tagging and GPS snapping")
+    p.add_argument("--config", help="FusionConfig JSON for uploaded rides, e.g. models/<model>.fusion.json")
+    p.add_argument("--weights", help="road-damage model, to run detection on uploads that only have video")
+    p.add_argument("--uploads", default="uploads")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8000)
+    p.set_defaults(func=_serve)
 
     args = parser.parse_args(argv)
     try:

@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dashboard-demo",
+      "runtimeExecutable": "C:/Users/lenovo/AppData/Local/Microsoft/WindowsApps/python.exe",
+      "runtimeArgs": [
+        "-c",
+        "import sys; sys.path.insert(0, 'D:/pothole_mapping/roadscan/pipeline'); from roadscan.__main__ import main; main(['serve', '--db', 'D:/pothole_mapping/roadscan/demo/roadscan.db', '--places', 'D:/pothole_mapping/roadscan/demo/osm', '--uploads', 'D:/pothole_mapping/roadscan/demo/uploads', '--port', '8000'])"
+      ],
+      "port": 8000
+    }
+  ]
+}

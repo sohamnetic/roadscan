@@ -1,0 +1,20 @@
+<!-- Label Studio labelling interface for RoadScan ride frames.
+     Paste into: Project > Settings > Labeling Interface > Code.
+     Class names must match roadscan/labeling/classes.py. -->
+<View>
+  <Header value="Box every road defect, and every look-alike that is NOT a defect (speed breaker, manhole, patch, puddle)."/>
+  <Image name="image" value="$image" zoom="true" zoomControl="true" rotateControl="false"/>
+  <RectangleLabels name="label" toName="image" strokeWidth="2">
+    <Label value="pothole" background="#d1352b" hotkey="1"/>
+    <Label value="alligator_crack" background="#8e44ad" hotkey="2"/>
+    <Label value="crack" background="#2c7be5" hotkey="3"/>
+    <Label value="speed_breaker" background="#f1c40f" hotkey="4"/>
+    <Label value="manhole" background="#7f8c8d" hotkey="5"/>
+    <Label value="patch" background="#27ae60" hotkey="6"/>
+    <Label value="puddle" background="#16a085" hotkey="7"/>
+  </RectangleLabels>
+  <Choices name="frame_quality" toName="image" choice="single" showInLine="true">
+    <Choice value="ok"/>
+    <Choice value="blurry_or_dark"/>
+  </Choices>
+</View>

@@ -32,3 +32,6 @@ Thumbs.db
 
 # Local tool settings
 .claude/settings.local.json
+
+# Tool virtualenvs
+.venv-*/

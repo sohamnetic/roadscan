@@ -18,6 +18,8 @@ session folder ──► jolts (IMU) ──┐
 | `registry.py` | Matches potholes across rides and runs the lifecycle `open → confirmed → likely_fixed / dismissed → verified_fixed` |
 | `render.py` | Writes a self-contained Leaflet map with a repair-priority list and ward filter, plus CSV and GeoJSON exports |
 | `places.py` | Tags each defect with its nearest drivable road and its ward (OpenStreetMap, or the city's own ward file). Main roads raise repair priority (primary ×1.4, secondary ×1.3, tertiary ×1.15). Also writes the per-ward summary |
+| `mapmatch.py` | Map-matches a ride's GPS track to OSM roads (an HMM over connected roads). Fixes that drifted off the road are pulled back to its edge; fixes already on the road keep their lane position |
+| `service.py`, `api.py`, `static/dashboard.html` | Web backend and dashboard: map, filters, ward table, defect history, "mark repaired", ride upload, exports and printable work orders |
 | `blur.py` | Pixelates every person and vehicle in a ride video, covering faces and number plates, before footage is stored or shared |
 | `synth.py`, `evaluate.py` | Synthetic rides with ground truth, and the scoring used by the tests |
 
@@ -76,10 +78,49 @@ python -m roadscan map --db roadscan.db --out map.html --exports exports --place
 
 - `osm` downloads drivable roads and ward boundaries (OSM `admin_level=10` in Bengaluru) for the area around the mapped defects. It uses the Overpass API and falls back to mirrors when the main server is busy.
 - `--places` adds road, road type and ward to the map, the ward filter and the exports.
+- Passing `--places osm` to `process` also map-matches each ride's GPS before fusion, and writes `gps_matched.csv` into the session.
 - `exports/wards.csv` gives each ward's open defects, severe ones, and ones open more than 30 days. This is the view a ward engineer works from.
 - To use the city's official ward map instead of OSM's, add `--wards city_wards.geojson`.
 
 After a site check, close a defect with `python -m roadscan fix <id> --db roadscan.db`.
+
+## Dashboard and API
+
+```bash
+pip install -e ".[web,places]"
+```
+
+```bash
+python -m roadscan serve --db roadscan.db --places osm --config ../../models/roadscan_rdd_india_y11m.fusion.json
+```
+
+Open http://127.0.0.1:8000/.
+
+| Feature | Details |
+|---|---|
+| Map | Defects colored by status; open counts, plus how many have been open more than 30, 60 or 90 days |
+| Filters | Status, ward, severity |
+| Priority list | Click a defect for its history: every ride that saw it, with confidence and jolt |
+| Mark repaired | For use after a site check |
+| Wards tab | The per-ward table, with a work order for each ward |
+| Upload | Takes a `.zip` of one session folder. Processing runs in the background. If the zip has video but no `detections.csv`, detection runs first, provided the server was started with `--weights` |
+| Exports | CSV, GeoJSON, ward CSV, and a printable work order. Use the browser's Print → Save as PDF |
+
+API endpoints:
+- `GET /api/potholes?status=&ward=&min_severity=`
+- `GET /api/potholes/{id}`
+- `POST /api/potholes/{id}/fix`
+- `GET /api/wards`
+- `GET /api/summary`
+- `POST /api/sessions`
+- `GET /api/jobs`
+- `GET /api/export/...`
+- `GET /workorder?ward=`
+
+**Limits of this MVP:**
+- There are no logins, so the server binds to 127.0.0.1. Add authentication before anyone else can reach it.
+- Storage is the SQLite registry. Move to PostGIS when several cities or a lot of concurrent uploads arrive.
+- The dashboard is plain JavaScript with MapLibre, no build step. Move it to React when it outgrows one page.
 
 ## Synthetic results (8 rides, seed 7)
 
@@ -101,9 +142,9 @@ At night, recall drops to about 0.3. The camera is unsure, so a pothole is confi
 **These numbers only show that the code works.** The simulated detector and road were designed by us, so they say nothing about real roads. The real test is the walked ground-truth route in the plan.
 
 ## Not built yet
-- Full GPS-track map-matching (OSRM/Valhalla). Each defect is snapped to its nearest road, but the track itself is not.
 - Evidence photo crops, to be cut from the blurred video
-- Backend API and dashboard
+- Logins and roles in the dashboard; PostGIS
+- One-way streets in map-matching (all roads are treated as two-way)
 - On-device inference
-- `detect.py` and `blur.py` have not been run on a real ride video yet
+- `detect.py`, `blur.py` and map-matching have not been run on a real ride yet
 - The OSM ward boundaries have not been checked against the city's official ward list

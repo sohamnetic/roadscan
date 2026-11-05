@@ -5,8 +5,9 @@ Phones on bikes and autos find potholes and other road damage, tag each one with
 | Folder | What's in it |
 |---|---|
 | [`roadscan/mobile`](roadscan/mobile) | Android capture app (Kotlin, CameraX). Records synced video, GPS and accelerometer data |
-| [`roadscan/pipeline`](roadscan/pipeline) | Python pipeline that turns rides into a map: detection, jolt sensing, fusion, pothole tracking, blurring, road/ward tagging, map and exports |
-| [`roadscan/ml`](roadscan/ml) | Model training on RDD2022 (India) and threshold calibration |
+| [`roadscan/pipeline`](roadscan/pipeline) | Python pipeline that turns rides into a map: detection, jolt sensing, fusion, pothole tracking, blurring, map-matching, road/ward tagging. Also the web dashboard and API (`roadscan serve`) |
+| [`roadscan/labeling`](roadscan/labeling) | Labelling our own ride frames in Label Studio: frame picking with pre-filled boxes, and conversion back to YOLO |
+| [`roadscan/ml`](roadscan/ml) | Model training on RDD2022 (India), threshold calibration, and on-phone (TFLite) export |
 | [`roadscan/demo`](roadscan/demo) | Demo map from synthetic rides, with ward summary |
 | `models/` | Model files. Weights (`*.pt`) are not in git; the `*.fusion.json` threshold files are |
 

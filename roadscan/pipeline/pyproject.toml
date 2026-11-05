@@ -7,7 +7,9 @@ dependencies = ["numpy>=1.24", "scipy>=1.10", "pandas>=2.0", "scikit-learn>=1.3"
 
 [project.optional-dependencies]
 yolo = ["ultralytics>=8.3"]
-dev = ["pytest>=8"]
+places = ["shapely>=2.0", "networkx>=3.0", "requests>=2.28"]
+web = ["fastapi>=0.110", "uvicorn>=0.27", "python-multipart>=0.0.9"]
+dev = ["pytest>=8", "httpx>=0.27"]
 
 [project.scripts]
 roadscan = "roadscan.__main__:main"
@@ -18,6 +20,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["roadscan"]
+
+[tool.setuptools.package-data]
+roadscan = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

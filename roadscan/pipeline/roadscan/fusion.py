@@ -16,8 +16,8 @@ import pandas as pd
 from .geo import Track, cluster_points, project_detections
 from .session import Session
 
-DAMAGE_CLASSES = ("pothole", "alligator_crack", "longitudinal_crack", "transverse_crack")
-LINEAR_CRACKS = ("longitudinal_crack", "transverse_crack")
+DAMAGE_CLASSES = ("pothole", "alligator_crack", "crack", "longitudinal_crack", "transverse_crack")
+LINEAR_CRACKS = ("crack", "longitudinal_crack", "transverse_crack")  # "crack" = both, merged
 NEGATIVE_CLASSES = ("speed_breaker", "manhole", "patch", "puddle")
 
 CANDIDATE_COLUMNS = [
