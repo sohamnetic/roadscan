@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#111418">
+<title>RoadScan Capture</title>
+<style>
+  :root { --bg:#111418; --fg:#eef1f5; --muted:#9aa6b4; --line:#2a313a; --panel:#1b2027; --accent:#3b82f6; --rec:#e5484d; --ok:#30a46c; --warn:#f5a524; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:16px/1.4 -apple-system, system-ui, "Segoe UI", sans-serif; }
+  body { padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  main { max-width:560px; margin:0 auto; padding:16px; }
+  h1 { font-size:20px; margin:4px 0 2px; } .sub { color:var(--muted); font-size:13px; margin:0 0 14px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:12px; }
+  label { display:block; font-size:13px; color:var(--muted); margin:8px 0 4px; }
+  input, select { width:100%; font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:9px 10px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  button { font:inherit; font-weight:600; border:0; border-radius:10px; padding:13px 16px; width:100%; color:#fff; background:var(--accent); cursor:pointer; }
+  button.secondary { background:var(--line); } button.rec { background:var(--rec); } button:disabled { opacity:.45; }
+  .row { display:flex; gap:10px; } .row > * { flex:1; }
+  .status { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .pill { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:8px; text-align:center; }
+  .pill b { display:block; font-size:18px; } .pill span { font-size:11px; color:var(--muted); }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--rec); }
+  #preview { width:100%; aspect-ratio:16/9; background:#000; border-radius:12px; object-fit:cover; display:block; }
+  .vwrap { position:relative; margin-bottom:12px; }
+  .horizon { position:absolute; left:0; right:0; top:50%; border-top:1px dashed rgba(255,255,255,.55); pointer-events:none; }
+  .roadline { position:absolute; left:0; right:0; top:40%; border-top:1px solid rgba(48,164,108,.8); pointer-events:none; }
+  .badge { position:absolute; top:8px; left:8px; background:rgba(0,0,0,.6); border-radius:8px; padding:4px 8px; font-size:13px; }
+  .recdot { display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--rec); margin-right:6px; animation:blink 1s infinite; }
+  @keyframes blink { 50% { opacity:.2; } }
+  progress { width:100%; height:10px; }
+  .log { font-size:13px; color:var(--muted); white-space:pre-wrap; }
+  .hint { font-size:13px; color:var(--muted); margin:6px 0 0; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>RoadScan Capture</h1>
+  <p class="sub">Records road video, GPS and bumps for the pothole map. Mount the phone <b>sideways (landscape)</b>, rear camera facing the road ahead.</p>
+
+  <section id="setup" class="card">
+    <div class="grid2">
+      <div><label for="vehicle">Vehicle</label>
+        <select id="vehicle"><option value="bike">Bike / scooter</option><option value="auto">Auto</option></select></div>
+      <div><label for="quality">Video</label>
+        <select id="quality"><option value="720">720p (recommended)</option><option value="1080">1080p (big files)</option></select></div>
+      <div><label for="height">Phone height above road (m)</label><input id="height" type="number" step="0.05" min="0.3" max="3" value="1.10"></div>
+      <div><label for="pitch">Camera tilt down (°)</label><input id="pitch" type="number" step="0.5" min="-10" max="60" value="12"></div>
+    </div>
+    <p class="hint">Measure the height with a tape. For the tilt, mount the phone, start the camera and press <b>Measure tilt</b> while the bike stands still.</p>
+  </section>
+
+  <div class="vwrap">
+    <video id="preview" playsinline muted autoplay></video>
+    <div class="horizon"></div><div class="roadline"></div>
+    <div class="badge" id="badge">Camera off</div>
+  </div>
+
+  <section class="card">
+    <div class="status">
+      <div class="pill"><b id="sGps">–</b><span>GPS accuracy</span></div>
+      <div class="pill"><b id="sSpeed">–</b><span>speed km/h</span></div>
+      <div class="pill"><b id="sImu">–</b><span>motion Hz</span></div>
+      <div class="pill"><b id="sTilt">–</b><span>tilt down °</span></div>
+      <div class="pill"><b id="sTime">0:00</b><span>recording</span></div>
+      <div class="pill"><b id="sSize">0</b><span>video MB</span></div>
+    </div>
+  </section>
+
+  <div class="row" style="margin-bottom:10px">
+    <button id="btnStart">Start camera &amp; sensors</button>
+  </div>
+  <div class="row" style="margin-bottom:10px">
+    <button id="btnTilt" class="secondary" disabled>Measure tilt</button>
+    <button id="btnRec" class="rec" disabled>● Record</button>
+  </div>
+
+  <section id="done" class="card" hidden>
+    <b id="doneTitle">Ride saved</b>
+    <p class="log" id="doneInfo"></p>
+    <div class="row" style="margin:8px 0">
+      <button id="btnUpload">Upload to laptop</button>
+      <button id="btnSave" class="secondary">Save to Files</button>
+    </div>
+    <progress id="prog" value="0" max="1" hidden></progress>
+    <p class="log" id="upLog"></p>
+  </section>
+
+  <p class="hint">Keep this screen open while riding: iPhone stops the camera and sensors if you switch apps or lock the phone. Ride normally; 5–15 minutes per recording works best.</p>
+</main>
+<script>
+// ---- constants -------------------------------------------------------------------------------
+// iPhone 14 Pro Max main (1x) camera, 16:9 video: about 69 x 42 degrees.
+const FOV_LONG_DEG = 69.0, FOV_SHORT_DEG = 42.0;
+// WebKit on iOS reports accelerationIncludingGravity with the opposite sign to the W3C spec
+// (and to Android). Normalise to the spec: a phone flat on a table, screen up, reads z = +9.81.
+const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const ACC_SIGN = IOS ? -1 : 1;
+const DEG = Math.PI / 180;
+const token = new URLSearchParams(location.search).get("token") || "";
+
+const $ = (id) => document.getElementById(id);
+const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+                set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+for (const id of ["vehicle", "quality", "height", "pitch"]) {
+  $(id).value = store.get("rs_" + id, $(id).value);
+  $(id).addEventListener("change", () => store.set("rs_" + id, $(id).value));
+}
+
+// ---- state -----------------------------------------------------------------------------------
+let stream = null, recorder = null, chunks = [], wakeLock = null;
+let t0 = null, startWall = null, videoT0 = 0, recording = false;
+let gpsRows = [], imuRows = [], lastGrav = null, imuCount = 0, imuWindowStart = performance.now();
+let session = null;  // finished ride: { id, files: {name: Blob} }
+
+const now = () => (performance.now() - t0) / 1000;
+const csvNum = (v, d) => (v === null || v === undefined || Number.isNaN(v) ? "" : (+v).toFixed(d));
+
+// ---- sensors ---------------------------------------------------------------------------------
+function onMotion(e) {
+  const a = e.accelerationIncludingGravity, r = e.rotationRate;
+  if (!a || a.x === null) return;
+  const ax = ACC_SIGN * a.x, ay = ACC_SIGN * a.y, az = ACC_SIGN * a.z;
+  // Slow low-pass for the live tilt readout (gravity direction).
+  lastGrav = lastGrav ? lastGrav.map((g, i) => g + 0.05 * ([ax, ay, az][i] - g)) : [ax, ay, az];
+  imuCount++;
+  if (recording) {
+    imuRows.push([now(), ax, ay, az, (r?.beta ?? 0) * DEG, (r?.gamma ?? 0) * DEG, (r?.alpha ?? 0) * DEG]);
+  }
+}
+
+// Downward tilt of the rear camera (it looks along the phone's -z axis) from gravity.
+function tiltDeg() {
+  if (!lastGrav) return null;
+  const [x, y, z] = lastGrav, n = Math.hypot(x, y, z);
+  return n > 1 ? Math.asin(Math.max(-1, Math.min(1, z / n))) / DEG : null;
+}
+
+function onGps(p) {
+  const c = p.coords;
+  $("sGps").textContent = `${Math.round(c.accuracy)} m`;
+  $("sGps").className = c.accuracy <= 10 ? "ok" : c.accuracy <= 30 ? "warn" : "bad";
+  $("sSpeed").textContent = c.speed == null || c.speed < 0 ? "–" : Math.round(c.speed * 3.6);
+  if (recording) {
+    gpsRows.push([now(), c.latitude, c.longitude, c.accuracy,
+      c.speed == null || c.speed < 0 ? null : c.speed,
+      c.heading == null || Number.isNaN(c.heading) || c.heading < 0 ? null : c.heading]);
+  }
+}
+
+setInterval(() => {
+  const dt = (performance.now() - imuWindowStart) / 1000;
+  $("sImu").textContent = imuCount ? Math.round(imuCount / dt) : "–";
+  imuCount = 0; imuWindowStart = performance.now();
+  const tilt = tiltDeg();
+  $("sTilt").textContent = tilt == null ? "–" : tilt.toFixed(1);
+  if (recording) {
+    const s = Math.floor(now() - videoT0);
+    $("sTime").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    $("sSize").textContent = (chunks.reduce((n, c) => n + c.size, 0) / 1e6).toFixed(0);
+  }
+}, 1000);
+
+// ---- start -----------------------------------------------------------------------------------
+$("btnStart").addEventListener("click", async () => {
+  $("btnStart").disabled = true;
+  try {
+    if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+      const res = await DeviceMotionEvent.requestPermission();  // iOS asks once, from a tap
+      if (res !== "granted") throw new Error("Motion access was refused. Allow it in Safari settings for this site.");
+    }
+    window.addEventListener("devicemotion", onMotion);
+
+    if (!navigator.geolocation) throw new Error("No GPS in this browser.");
+    navigator.geolocation.watchPosition(onGps, (e) => ($("sGps").textContent = "off", alert("GPS: " + e.message)),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
+
+    const h = $("quality").value === "1080" ? 1080 : 720;
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false,
+      video: { facingMode: { ideal: "environment" }, width: { ideal: h * 16 / 9 }, height: { ideal: h }, frameRate: { ideal: 30 } } });
+    $("preview").srcObject = stream;
+    const s = stream.getVideoTracks()[0].getSettings();
+    $("badge").textContent = `${s.width}×${s.height} @ ${Math.round(s.frameRate || 30)} fps` + (s.width < s.height ? " · turn phone sideways" : "");
+    $("btnTilt").disabled = false; $("btnRec").disabled = false;
+    $("btnStart").textContent = "Camera & sensors on";
+  } catch (err) {
+    $("btnStart").disabled = false;
+    alert(err.message || err);
+  }
+});
+
+$("btnTilt").addEventListener("click", () => {
+  const tilt = tiltDeg();
+  if (tilt == null) return alert("No motion data yet. Wait a second and try again.");
+  if (tilt < -2) alert("The camera seems to point UP. Tilt it down so the road fills the lower part of the picture.");
+  $("pitch").value = tilt.toFixed(1); store.set("rs_pitch", $("pitch").value);
+});
+
+// ---- record ----------------------------------------------------------------------------------
+$("btnRec").addEventListener("click", async () => (recording ? stopRecording() : startRecording()));
+
+async function startRecording() {
+  if (!stream) return;
+  const type = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m));
+  if (!type) return alert("This browser cannot record video.");
+  gpsRows = []; imuRows = []; chunks = []; session = null; $("done").hidden = true;
+  t0 = performance.now(); startWall = new Date();
+  const h = stream.getVideoTracks()[0].getSettings().height;
+  recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: h >= 1080 ? 8e6 : 4e6 });
+  recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  recorder.onstart = () => { videoT0 = now(); };
+  recorder.onstop = finishRecording;
+  recorder.start(1000);
+  recording = true;
+  try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+  $("btnRec").textContent = "■ Stop";
+  $("badge").innerHTML = `<span class="recdot"></span>Recording`;
+  for (const id of ["vehicle", "quality", "height", "pitch", "btnTilt"]) $(id).disabled = true;
+}
+
+function stopRecording() {
+  recording = false;
+  recorder?.stop();
+  wakeLock?.release?.().catch(() => {}); wakeLock = null;
+  $("btnRec").textContent = "● Record";
+  for (const id of ["vehicle", "quality", "height", "pitch", "btnTilt"]) $(id).disabled = false;
+}
+
+function finishRecording() {
+  const settings = stream.getVideoTracks()[0].getSettings();
+  const landscape = settings.width >= settings.height;
+  const stamp = startWall.toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15);
+  const id = `iphone_${stamp}`;
+  const mime = recorder.mimeType || chunks[0]?.type || "video/mp4";
+  const ext = mime.includes("webm") ? "webm" : "mp4";
+  const meta = {
+    session_id: id, vehicle_type: $("vehicle").value, device: (IOS ? "iPhone Safari" : "Browser") + " capture",
+    start_time_utc: startWall.toISOString(),
+    camera: { width: settings.width, height: settings.height,
+              hfov_deg: landscape ? FOV_LONG_DEG : FOV_SHORT_DEG, vfov_deg: landscape ? FOV_SHORT_DEG : FOV_LONG_DEG,
+              height_m: +$("height").value, pitch_deg: +$("pitch").value },
+    video_t0: +videoT0.toFixed(3),
+  };
+  const gps = "t,lat,lon,accuracy_m,speed_mps,bearing_deg\n" + gpsRows.map((r) =>
+    [csvNum(r[0], 3), csvNum(r[1], 7), csvNum(r[2], 7), csvNum(r[3], 1), csvNum(r[4], 2), csvNum(r[5], 1)].join(",")).join("\n") + "\n";
+  const imu = "t,ax,ay,az,gx,gy,gz\n" + imuRows.map((r) =>
+    [csvNum(r[0], 4), ...r.slice(1).map((v) => csvNum(v, 4))].join(",")).join("\n") + "\n";
+  session = { id, files: {
+    "meta.json": new Blob([JSON.stringify(meta, null, 2)], { type: "application/json" }),
+    "gps.csv": new Blob([gps], { type: "text/csv" }),
+    "imu.csv": new Blob([imu], { type: "text/csv" }),
+    [`video.${ext}`]: new Blob(chunks, { type: mime }),
+  } };
+  const dur = (now() - videoT0);
+  const warn = [];
+  if (gpsRows.length < 5) warn.push("very few GPS fixes: ride outdoors with a clear sky");
+  if (imuRows.length / Math.max(dur, 1) < 40) warn.push("motion sensor rate is low");
+  if (!landscape) warn.push("video is portrait: mount the phone sideways next time");
+  $("doneTitle").textContent = `Ride ${id}`;
+  $("doneInfo").textContent = `${Math.round(dur)} s · ${gpsRows.length} GPS fixes · ${imuRows.length} motion samples · ` +
+    `${(session.files[`video.${ext}`].size / 1e6).toFixed(0)} MB video` + (warn.length ? `\n⚠ ${warn.join("\n⚠ ")}` : "");
+  $("done").hidden = false; $("upLog").textContent = ""; $("prog").hidden = true;
+  $("badge").textContent = "Saved. Upload or save it.";
+}
+
+// ---- upload / save ---------------------------------------------------------------------------
+$("btnUpload").addEventListener("click", () => {
+  if (!session) return;
+  const body = new FormData();
+  for (const [name, blob] of Object.entries(session.files)) body.append("files", blob, name);
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/sessions/files" + (token ? "?token=" + encodeURIComponent(token) : ""));
+  $("prog").hidden = false; $("btnUpload").disabled = true;
+  xhr.upload.onprogress = (e) => { if (e.lengthComputable) { $("prog").value = e.loaded / e.total;
+    $("upLog").textContent = `Uploading ${(e.loaded / 1e6).toFixed(0)} / ${(e.total / 1e6).toFixed(0)} MB…`; } };
+  xhr.onload = () => {
+    $("btnUpload").disabled = false;
+    if (xhr.status === 200) { $("upLog").textContent = "Uploaded. The laptop is processing it; see the dashboard."; }
+    else { $("upLog").textContent = `Upload failed (${xhr.status}): ${xhr.responseText.slice(0, 200)}`; }
+  };
+  xhr.onerror = () => { $("btnUpload").disabled = false; $("upLog").textContent = "Upload failed: is the laptop server running and on the same Wi-Fi?"; };
+  xhr.send(body);
+});
+
+$("btnSave").addEventListener("click", async () => {
+  if (!session) return;
+  const files = Object.entries(session.files).map(([n, b]) => new File([b], `${session.id}__${n}`, { type: b.type }));
+  try {
+    if (navigator.canShare?.({ files })) await navigator.share({ files, title: session.id });
+    else throw new Error("share unsupported");
+  } catch (err) {
+    if (err.name === "AbortError") return;
+    for (const f of files) { const a = document.createElement("a"); a.href = URL.createObjectURL(f); a.download = f.name; a.click(); }
+  }
+});
+
+window.addEventListener("beforeunload", (e) => { if (recording || (session && $("upLog").textContent.indexOf("Uploaded") < 0)) { e.preventDefault(); e.returnValue = ""; } });
+document.addEventListener("visibilitychange", () => { if (document.hidden && recording) $("badge").textContent = "Paused by iPhone: keep the screen open!"; });
+</script>
+</body>
+</html>

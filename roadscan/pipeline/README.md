@@ -84,6 +84,31 @@ python -m roadscan map --db roadscan.db --out map.html --exports exports --place
 
 After a site check, close a defect with `python -m roadscan fix <id> --db roadscan.db`.
 
+## Recording with an iPhone (Safari capture page)
+Native iPhone apps can only be built on a Mac. For testing, the capture app is a web page instead. Open it in Safari: it records video, GPS and motion sensors in the same session format as the Android app, then uploads the ride straight to the laptop.
+
+**On the laptop:**
+
+```bash
+python -m roadscan serve --lan --db roadscan.db --weights ../../models/roadscan_rdd_india_y11m.pt --config ../../models/roadscan_rdd_india_y11m.fusion.json
+```
+
+- `--lan` serves HTTPS on the Wi-Fi, because the iPhone camera needs HTTPS. It uses a self-signed certificate made for this laptop, plus a fresh access token.
+- It prints a link like `https://192.168.1.8:8443/capture?token=...`.
+- The first time, Windows asks whether Python may accept network connections. Allow **Private networks**.
+
+**On the iPhone (same Wi-Fi):**
+1. Open the printed link in **Safari**. Safari warns that the connection isn't private, because the certificate is the laptop's own. Tap **Show Details → visit this website**.
+2. Tap **Start camera & sensors**, then allow Camera, Location and Motion.
+3. Mount the phone **sideways (landscape)**, with the rear camera on the road ahead. Enter the phone's height above the road, then tap **Measure tilt** while standing still.
+4. Tap **Record** and ride. **Keep the screen on and the page open**: iPhone pauses the camera and sensors in the background.
+5. Tap **Stop**, then **Upload to laptop**. The laptop runs detection and processing, and the ride shows up on the dashboard. **Save to Files** keeps a copy on the phone.
+
+Details:
+- Video is 720p by default, about 30 MB per minute.
+- Safari gives motion data at about 60 Hz, which is plenty for jolts (the pipeline needs ≥ 40 Hz).
+- Anyone without the token gets a 401, but this laptop itself never needs it. Only run `--lan` on a network you trust.
+
 ## Dashboard and API
 
 ```bash

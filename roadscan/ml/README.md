@@ -45,3 +45,22 @@ The model's confidence scores run low: pothole F1 peaks near 0.2, so the pipelin
 ```bash
 python calibrate.py --weights D:/pothole_mapping/models/roadscan_rdd_india_y11m.pt --data D:/pothole_mapping/data/rdd_india_yolo/data.yaml --augment
 ```
+
+## On-phone model (TFLite)
+TensorFlow lives in its own virtualenv. Pin `ultralytics==8.4.80` there: newer versions export TFLite as "LiteRT", which is Linux/macOS only.
+
+```bash
+../../.venv-export/Scripts/python export_mobile.py --weights D:/pothole_mapping/models/roadscan_rdd_india_y11m.pt --data D:/pothole_mapping/data/rdd_india_yolo/data.yaml
+```
+
+YOLO11m, India val set. Speed is laptop CPU with 4 threads, only a rough guide to phone speed:
+
+| File | Size | CPU ms/frame | mAP50 | Pothole AP50 |
+|---|---|---|---|---|
+| `.pt` (PyTorch) | 40.5 MB | n/a | 0.322 | 0.396 |
+| `_fp16.tflite` | 40.3 MB | 299 | 0.317 | 0.394 |
+| `_int8.tflite` | 20.7 MB | 188 | 0.312 | 0.388 |
+
+- int8 costs under 1 point of accuracy at half the size.
+- YOLO11m is still too heavy to detect live on a phone at 5–10 fps. For on-phone detection, train YOLO11n or YOLO11s, which are about 3–10× faster.
+- For now, detection runs on the laptop after upload.

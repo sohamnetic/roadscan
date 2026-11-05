@@ -2,13 +2,17 @@
 
     python -m roadscan serve --db roadscan.db --places osm --config models/<model>.fusion.json
 
-MVP scope: SQLite registry (PostGIS later), no logins, so it binds to 127.0.0.1 by default.
-Put it behind authentication before exposing it to anyone else: `fix` and uploads change data.
+MVP scope: SQLite registry (PostGIS later), no user logins. It binds to 127.0.0.1 by default.
+With `--lan` (for recording from a phone on the same Wi-Fi) every request that does not come
+from this laptop must carry the access token printed at start-up (?token=... or X-RoadScan-Token).
 """
 from __future__ import annotations
 
+import hmac
 import html
 import io
+import json
+import re
 import threading
 import uuid
 import zipfile
@@ -16,18 +20,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 
 from .fusion import FusionConfig
 from .registry import Registry
 
 STATIC = Path(__file__).parent / "static"
 ACTIVE = ("open", "confirmed")
+SESSION_FILES = {"meta.json", "gps.csv", "imu.csv", "detections.csv", "video.mp4", "video.webm", "video.mov"}
+LOOPBACK = {"127.0.0.1", "::1", "localhost", "testclient"}
 
 
 def create_app(db: str | Path, places: str | Path | None = None, config: FusionConfig = FusionConfig(),
-               uploads: str | Path = "uploads", weights: str | Path | None = None):
+               uploads: str | Path = "uploads", weights: str | Path | None = None, token: str | None = None):
     from .places import tag_places, ward_summary
     from .render import _columns, to_geojson
 
@@ -39,6 +45,16 @@ def create_app(db: str | Path, places: str | Path | None = None, config: FusionC
     lock = threading.Lock()  # one ingest at a time: the registry merge is not concurrent-safe
 
     app = FastAPI(title="RoadScan", version="0.1")
+
+    @app.middleware("http")
+    async def require_token(request: Request, call_next):
+        """Requests from other devices need the token; this laptop itself never does."""
+        client = request.client.host if request.client else ""
+        if token and client not in LOOPBACK:
+            given = request.query_params.get("token") or request.headers.get("x-roadscan-token") or ""
+            if not hmac.compare_digest(given, token):
+                return PlainTextResponse("Missing or wrong access token: open the link printed by `roadscan serve`.", 401)
+        return await call_next(request)
 
     def load() -> pd.DataFrame:
         with Registry(db) as reg:
@@ -56,6 +72,10 @@ def create_app(db: str | Path, places: str | Path | None = None, config: FusionC
     @app.get("/", response_class=HTMLResponse)
     def dashboard():
         return FileResponse(STATIC / "dashboard.html")
+
+    @app.get("/capture", response_class=HTMLResponse)
+    def capture():
+        return FileResponse(STATIC / "capture.html")
 
     @app.get("/api/potholes")
     def potholes(status: str | None = None, ward: str | None = None, min_severity: int = 0):
@@ -151,6 +171,34 @@ def create_app(db: str | Path, places: str | Path | None = None, config: FusionC
         background.add_task(_run_job, job, session_dir)
         return jobs[job]
 
+    @app.post("/api/sessions/files")
+    async def upload_files(background: BackgroundTasks, files: list[UploadFile] = File(...)):
+        """A ride sent as separate files (the phone capture page): no zipping on the phone."""
+        names = {Path(f.filename or "").name for f in files}
+        if not {"meta.json", "gps.csv", "imu.csv"} <= names or not names <= SESSION_FILES:
+            raise HTTPException(400, f"need meta.json, gps.csv, imu.csv (+ video); got {sorted(names)}")
+        meta = next(f for f in files if Path(f.filename).name == "meta.json")
+        try:
+            session_id = json.loads(await meta.read())["session_id"]
+        except Exception:
+            raise HTTPException(400, "meta.json is not valid") from None
+        await meta.seek(0)
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", session_id):
+            raise HTTPException(400, "bad session_id")
+        job = uuid.uuid4().hex[:8]
+        session_dir = uploads / f"upload_{job}" / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        for f in files:
+            name = Path(f.filename).name
+            if name.startswith("video."):
+                name = "video.mp4"  # one name for the pipeline; ffmpeg reads the real container
+            with open(session_dir / name, "wb") as out:
+                while chunk := await f.read(1 << 20):
+                    out.write(chunk)
+        jobs[job] = {"job": job, "file": session_id, "state": "queued", "message": "", "at": _now()}
+        background.add_task(_run_job, job, session_dir)
+        return jobs[job]
+
     @app.get("/api/jobs")
     def list_jobs():
         return sorted(jobs.values(), key=lambda j: j["at"], reverse=True)
@@ -174,6 +222,54 @@ def create_app(db: str | Path, places: str | Path | None = None, config: FusionC
             jobs[job].update(state="failed", message=f"{type(e).__name__}: {e}")
 
     return app
+
+
+def lan_addresses() -> list[str]:
+    """IPv4 addresses of this machine's network adapters (the phone uses the Wi-Fi one)."""
+    import socket
+
+    found = set()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            found.add(info[4][0])
+    except OSError:
+        pass
+    try:  # the adapter that routes to the internet: almost always the Wi-Fi one
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))  # UDP connect sends nothing
+            primary = s.getsockname()[0]
+    except OSError:
+        primary = None
+    ordered = ([primary] if primary else []) + sorted(found - {primary, "127.0.0.1"})
+    return ordered
+
+
+def self_signed_cert(folder: str | Path, addresses: list[str]) -> tuple[Path, Path]:
+    """A self-signed HTTPS certificate for this laptop's LAN addresses (iPhone camera needs HTTPS)."""
+    import ipaddress
+    from datetime import timedelta
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    cert_path, key_path = folder / "roadscan-lan.crt", folder / "roadscan-lan.key"
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "RoadScan laptop")])
+    sans = [x509.DNSName("localhost")] + [x509.IPAddress(ipaddress.ip_address(a)) for a in addresses + ["127.0.0.1"]]
+    now = datetime.now(timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+            .serial_number(x509.random_serial_number()).not_valid_before(now - timedelta(days=1))
+            .not_valid_after(now + timedelta(days=397))
+            .add_extension(x509.SubjectAlternativeName(sans), critical=False)
+            .sign(key, hashes.SHA256()))
+    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    key_path.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                           serialization.NoEncryption()))
+    return cert_path, key_path
 
 
 def _now() -> str:

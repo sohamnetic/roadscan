@@ -106,17 +106,35 @@ def _blur(args) -> None:
 
 
 def _serve(args) -> None:
+    import secrets
+
     import uvicorn
 
-    from .api import create_app
+    from .api import create_app, lan_addresses, self_signed_cert
     from .fusion import FusionConfig, load_config
 
     config = load_config(args.config) if args.config else FusionConfig()
-    app = create_app(args.db, places=args.places, config=config, uploads=args.uploads, weights=args.weights)
-    if args.host not in ("127.0.0.1", "localhost"):
-        print("warning: no logins yet; anyone who can reach this address can upload rides and close defects")
-    print(f"dashboard: http://{args.host}:{args.port}/")
-    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    host, port, ssl = args.host, args.port, {}
+    token = None
+    if args.lan:
+        host, port = "0.0.0.0", args.port if args.port != 8000 else 8443
+        token = secrets.token_urlsafe(9)
+        addresses = lan_addresses()
+        cert, key = self_signed_cert(Path(args.uploads) / ".certs", addresses)
+        ssl = {"ssl_certfile": str(cert), "ssl_keyfile": str(key)}
+    app = create_app(args.db, places=args.places, config=config, uploads=args.uploads, weights=args.weights, token=token)
+    if args.lan:
+        print(f"dashboard (this laptop): https://localhost:{port}/")
+        print("phone capture page, open in Safari on the same Wi-Fi:")
+        for a in addresses:
+            print(f"   https://{a}:{port}/capture?token={token}")
+        print("Safari will warn the certificate is not trusted (it is this laptop's own): "
+              "tap Show Details -> visit this website.")
+        if not args.weights:
+            print("note: without --weights, uploaded rides can't be processed (they need detection first)")
+    else:
+        print(f"dashboard: http://{host}:{port}/")
+    uvicorn.run(app, host=host, port=port, log_level="warning", **ssl)
 
 
 def main(argv=None) -> int:
@@ -189,6 +207,8 @@ def main(argv=None) -> int:
     p.add_argument("--uploads", default="uploads")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--lan", action="store_true",
+                   help="serve HTTPS on the Wi-Fi with an access token, for the iPhone capture page")
     p.set_defaults(func=_serve)
 
     args = parser.parse_args(argv)

@@ -11,6 +11,7 @@ before anything leaves the device or laptop.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -62,6 +63,8 @@ def blur_video(
 ) -> dict:
     """Write a copy of `video` with people and vehicles pixelated; returns frame and box counts."""
     import cv2
+
+    os.environ.setdefault("YOLO_OFFLINE", "1")  # no downloads, update checks or analytics
     from ultralytics import YOLO
 
     video, out = Path(video), Path(out)

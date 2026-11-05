@@ -148,7 +148,7 @@ def check_gps(rows, r):
 
 
 def check_imu(rows, r):
-    span = check_times(rows, "imu", 80, 0.0125, r)
+    span = check_times(rows, "imu", 50, 0.025, r)  # iPhone Safari ~60 Hz, Android ~100 Hz; pipeline needs >= 40 Hz
     mags = [math.sqrt(row["ax"] ** 2 + row["ay"] ** 2 + row["az"] ** 2) for row in rows if None not in (row["ax"], row["ay"], row["az"])]
     if mags:
         g = statistics.median(mags)
@@ -187,7 +187,7 @@ def check_video(path: Path, meta: dict | None, sensor_end: float | None, r: Repo
     fps = num / den if den else 0
     frames = int(stream.get("nb_read_packets", 0))
     duration = float(stream.get("duration", 0))
-    r.check((w, h) == (1920, 1080), f"displayed size {w}x{h} (want 1920x1080)", warn_only=True)
+    r.check(min(w, h) >= 720 and w > h, f"displayed size {w}x{h} (want landscape, 720p or more)", warn_only=True)
     if meta and isinstance(meta.get("camera"), dict):
         r.check((w, h) == (meta["camera"].get("width"), meta["camera"].get("height")), "size matches meta.json camera width/height")
     r.check(abs(fps - 30) < 1.5, f"average frame rate {fps:.2f} fps over {frames} frames, {duration:.1f} s")

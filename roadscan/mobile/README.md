@@ -1,5 +1,7 @@
 # RoadScan Capture (Android)
 
+> **Testing on an iPhone?** Use the Safari capture page instead (`roadscan serve --lan`, see `pipeline/README.md`). This Android app is for the production driver fleet (most delivery and auto drivers in India use Android). It has not been built or run on a device yet.
+
 Phase 1 capture app. A phone on a bike or auto records a ride as a **session folder**: 1080p video, GPS, accelerometer and gyroscope, all on one clock. The offline pipeline in `../pipeline` reads that folder (`roadscan/session.py` is the contract).
 
 Kotlin, CameraX, Jetpack Compose. minSdk 26 (Android 8.0), targetSdk 35.

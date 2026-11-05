@@ -66,3 +66,30 @@ def test_upload_processes_a_ride(client, rides, tmp_path):
     client.post("/api/sessions", files={"file": ("again.zip", buf.getvalue(), "application/zip")})
     assert client.get("/api/jobs").json()[0]["state"] == "failed"
     assert client.post("/api/sessions", files={"file": ("x.zip", b"not a zip", "application/zip")}).status_code == 400
+
+
+def _files(ride):
+    out = [("files", (n, (ride / n).read_bytes())) for n in ("meta.json", "gps.csv", "imu.csv", "detections.csv")]
+    return out
+
+
+def test_phone_upload_as_files(client, rides):
+    r = client.post("/api/sessions/files", files=_files(rides / "ride_03"))
+    assert r.status_code == 200, r.text
+    assert client.get("/api/jobs").json()[0]["state"] == "done"
+    bad = client.post("/api/sessions/files", files=[("files", ("evil.sh", b"x")), *_files(rides / "ride_03")])
+    assert bad.status_code == 400
+    assert "RoadScan Capture" in client.get("/capture").text
+
+
+def test_token_required_from_other_devices(rides, tmp_path):
+    db = tmp_path / "t.db"
+    with Registry(db) as reg:
+        process_session(rides / "ride_01", reg)
+    app = create_app(db, uploads=tmp_path / "up", token="s3cret")
+    phone = TestClient(app, client=("192.168.1.20", 50000))
+    assert phone.get("/api/summary").status_code == 401
+    assert phone.get("/api/summary", params={"token": "nope"}).status_code == 401
+    assert phone.get("/api/summary", params={"token": "s3cret"}).status_code == 200
+    assert phone.get("/api/summary", headers={"X-RoadScan-Token": "s3cret"}).status_code == 200
+    assert TestClient(app).get("/api/summary").status_code == 200  # the laptop itself

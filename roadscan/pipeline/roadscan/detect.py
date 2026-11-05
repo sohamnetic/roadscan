@@ -5,6 +5,7 @@ names (D00, D10, D20, D40) are mapped onto the pipeline's names.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -36,6 +37,8 @@ def run_yolo(
     fusion thresholds with the same tta setting (ml/calibrate.py --augment).
     """
     import cv2
+
+    os.environ.setdefault("YOLO_OFFLINE", "1")  # no downloads, update checks or analytics
     from ultralytics import YOLO
 
     session_dir = Path(session_dir)
