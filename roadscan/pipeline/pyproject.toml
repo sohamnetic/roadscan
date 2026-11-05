@@ -1,0 +1,23 @@
+[project]
+name = "roadscan"
+version = "0.1.0"
+description = "Road-damage mapping pipeline: rides in, a tracked map of potholes out"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "scipy>=1.10", "pandas>=2.0", "scikit-learn>=1.3"]
+
+[project.optional-dependencies]
+yolo = ["ultralytics>=8.3"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+roadscan = "roadscan.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["roadscan"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

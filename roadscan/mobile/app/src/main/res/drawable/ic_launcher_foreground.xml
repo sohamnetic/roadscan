@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A road narrowing to the horizon with a pothole on it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF9AA5B1"
+        android:pathData="M48,34 L60,34 L80,78 L28,78 Z" />
+    <path
+        android:fillColor="#FFF5C518"
+        android:pathData="M53,38 L55,38 L56,46 L52,46 Z M51.5,52 L56.5,52 L58,64 L50,64 Z" />
+    <path
+        android:fillColor="#FF1F2933"
+        android:pathData="M62,70m-7,0a7,3 0,1 1,14 0a7,3 0,1 1,-14 0" />
+</vector>

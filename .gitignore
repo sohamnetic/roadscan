@@ -1,0 +1,34 @@
+# Datasets, training runs and weights stay on the local disk (too big for git; weights can go in a Release)
+data/
+runs/
+*.pt
+*.onnx
+*.tflite
+*.engine
+models/*_saved_model/
+
+# Ride recordings and registries: may hold location traces and unblurred footage
+*.mp4
+*.mov
+*.db
+*.db-journal
+roadscan/demo/rides/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+build/
+dist/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local tool settings
+.claude/settings.local.json
