@@ -1,7 +1,7 @@
 """Pick frames worth labelling from ride sessions and write a Label Studio task file.
 
     python make_tasks.py D:/rides/ride_01 D:/rides/ride_02 --out D:/pothole_mapping/data/labeling \
-        --weights D:/pothole_mapping/models/roadscan_rdd_india_y11m.pt
+        --weights D:/pothole_mapping/models/roadscan_rdd_india_v2_y11m_736.pt
 
 Labelling every frame wastes time: neighbouring frames are near-identical. Instead it takes
   - one frame every --every-s seconds (coverage), and
@@ -65,6 +65,7 @@ def main() -> None:
     from ultralytics import YOLO
 
     model = YOLO(args.weights)
+    imgsz = (model.ckpt or {}).get("train_args", {}).get("imgsz", 640)  # the size it was trained at
     images_dir = args.out / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
     tasks_path = args.out / "tasks.json"
@@ -85,7 +86,7 @@ def main() -> None:
                     if not ok:
                         break
                     h, w = image.shape[:2]
-                    result = model.predict(image, conf=args.low, imgsz=640, verbose=False)[0]
+                    result = model.predict(image, conf=args.low, imgsz=imgsz, verbose=False)[0]
                     confs = result.boxes.conf.tolist()
                     unsure = any(args.low <= c < args.high for c in confs)
                     if coverage or unsure:

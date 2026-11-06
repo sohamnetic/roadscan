@@ -52,7 +52,7 @@ python -m roadscan map --db ../demo/roadscan.db --out ../demo/map.html --exports
 For real rides, run these instead of `synth`/`eval` (it needs `pip install -e ".[yolo]"` and trained weights):
 
 ```bash
-python -m roadscan detect path/to/session --weights ../../models/roadscan_rdd_india_y11m.pt
+python -m roadscan detect path/to/session --weights ../../models/roadscan_rdd_india_v2_y11m_736.pt
 ```
 
 ```bash
@@ -60,7 +60,7 @@ python -m roadscan blur path/to/session --weights ../../models/yolo11n.pt
 ```
 
 ```bash
-python -m roadscan process path/to/session1 path/to/session2 --db roadscan.db --config ../../models/roadscan_rdd_india_y11m.fusion.json
+python -m roadscan process path/to/session1 path/to/session2 --db roadscan.db --config ../../models/roadscan_rdd_india_v2_y11m_736.fusion.json
 ```
 
 - `detect` runs on the original video, and `blur` writes `video_blurred.mp4`. Delete the original `video.mp4` before footage leaves the laptop.
@@ -90,7 +90,7 @@ Native iPhone apps can only be built on a Mac. For testing, the capture app is a
 **On the laptop:**
 
 ```bash
-python -m roadscan serve --lan --db roadscan.db --weights ../../models/roadscan_rdd_india_y11m.pt --config ../../models/roadscan_rdd_india_y11m.fusion.json
+python -m roadscan serve --lan --db roadscan.db --weights ../../models/roadscan_rdd_india_v2_y11m_736.pt --config ../../models/roadscan_rdd_india_v2_y11m_736.fusion.json
 ```
 
 - `--lan` serves HTTPS on the Wi-Fi, because the iPhone camera needs HTTPS. It uses a self-signed certificate made for this laptop, plus a fresh access token.
@@ -116,7 +116,7 @@ pip install -e ".[web,places]"
 ```
 
 ```bash
-python -m roadscan serve --db roadscan.db --places osm --config ../../models/roadscan_rdd_india_y11m.fusion.json
+python -m roadscan serve --db roadscan.db --places osm --config ../../models/roadscan_rdd_india_v2_y11m_736.fusion.json
 ```
 
 Open http://127.0.0.1:8000/.

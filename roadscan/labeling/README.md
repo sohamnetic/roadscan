@@ -27,7 +27,7 @@ python -m roadscan blur D:/rides/ride_01 --weights D:/pothole_mapping/models/yol
 **2. Pick frames worth labelling.** This takes one frame every 2 s, plus every frame where the model is unsure (confidence 0.10–0.50). The model's boxes are pre-filled, so labelling is mostly fixing, not drawing.
 
 ```bash
-python make_tasks.py D:/rides/ride_01 D:/rides/ride_02 --out D:/pothole_mapping/data/labeling --weights D:/pothole_mapping/models/roadscan_rdd_india_y11m.pt
+python make_tasks.py D:/rides/ride_01 D:/rides/ride_02 --out D:/pothole_mapping/data/labeling --weights D:/pothole_mapping/models/roadscan_rdd_india_v2_y11m_736.pt
 ```
 
 **3. Start Label Studio:** double-click `start_label_studio.bat`, then open http://localhost:8080 and create an account. The account is local to this laptop.

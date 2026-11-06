@@ -23,18 +23,24 @@ CLASS_ALIASES = {
 }
 
 
+def trained_imgsz(model, default: int = 640) -> int:
+    """The image size a YOLO checkpoint was trained at, read from its saved training args."""
+    size = (getattr(model, "ckpt", None) or {}).get("train_args", {}).get("imgsz", default)
+    return int(size[0] if isinstance(size, (list, tuple)) else size)
+
+
 def run_yolo(
     session_dir: str | Path,
     weights: str | Path,
     every: int = 6,
     conf: float = 0.10,
-    imgsz: int = 640,
-    tta: bool = True,
+    imgsz: int | None = None,
+    tta: bool = False,
 ) -> Path:
     """`conf` is only a floor: FusionConfig applies the real thresholds, so weak boxes must reach it.
 
-    Use the imgsz the model was trained at (scores drop when it differs), and calibrate the
-    fusion thresholds with the same tta setting (ml/calibrate.py --augment).
+    `imgsz` defaults to the size the model was trained at (scores drop when it differs).
+    Calibrate the fusion thresholds with the same tta setting (ml/calibrate.py --augment).
     """
     import cv2
 
@@ -48,6 +54,7 @@ def run_yolo(
         raise FileNotFoundError(video)
 
     model = YOLO(str(weights))
+    imgsz = imgsz or trained_imgsz(model)
     cap = cv2.VideoCapture(str(video))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     rows, frame = [], 0

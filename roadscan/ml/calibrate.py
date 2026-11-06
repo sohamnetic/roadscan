@@ -31,11 +31,13 @@ def main() -> None:
                                augment=args.augment, plots=False, verbose=False)
     box = m.box
     print(f"\n{'TTA' if args.augment else 'plain'} @ imgsz {args.imgsz}: mAP50 {box.map50:.3f}  mAP50-95 {box.map:.3f}")
-    for i, name in m.names.items():
+    # Curves and per-class arrays are indexed by position among the classes present in val.
+    present = [(i, m.names[int(k)]) for i, k in enumerate(box.ap_class_index)]
+    for i, name in present:
         print(f"  {name:20s} AP50 {box.ap50[i]:.3f}")
 
     px = np.asarray(box.px)
-    for i, name in m.names.items():
+    for i, name in present:
         p, r, f1 = (np.asarray(c)[i] for c in (box.p_curve, box.r_curve, box.f1_curve))
         best = int(f1.argmax())
         print(f"\n{name}: best F1 {f1[best]:.3f} at conf {px[best]:.2f} (P {p[best]:.2f}, R {r[best]:.2f})")

@@ -187,9 +187,10 @@ def main(argv=None) -> int:
     p.add_argument("--weights", required=True)
     p.add_argument("--every", type=int, default=6, help="process every Nth frame")
     p.add_argument("--conf", type=float, default=0.10, help="keep boxes above this; fusion applies the real thresholds")
-    p.add_argument("--imgsz", type=int, default=640, help="match the size the model was trained at")
-    p.add_argument("--tta", action=argparse.BooleanOptionalAction, default=True,
-                   help="test-time augmentation (flips + scales): slower, slightly more accurate")
+    p.add_argument("--imgsz", type=int, default=None, help="default: the size the model was trained at")
+    p.add_argument("--tta", action=argparse.BooleanOptionalAction, default=False,
+                   help="test-time augmentation (flips + scales): ~3x slower; use only if the "
+                        "model's thresholds were calibrated with it")
     p.set_defaults(func=_detect)
 
     p = sub.add_parser("blur", help="pixelate people and vehicles in a session's video (privacy)")

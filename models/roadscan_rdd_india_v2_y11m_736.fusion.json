@@ -1,0 +1,11 @@
+{
+  "_model": "roadscan_rdd_india_v2_y11m_736.pt, run with `roadscan detect` defaults (imgsz 736 from the checkpoint, no TTA)",
+  "_source": "ml/calibrate.py --imgsz 736 (plain) on the RDD2022 India val split (1155 images), box-level, IoU 0.5",
+  "_pothole": "0.35 -> P 0.71 R 0.28 per box; 0.10 -> P 0.32 R 0.55 per box (only counted with a matching jolt)",
+  "_alligator_crack": "0.35 -> P 0.72 R 0.43 per box",
+  "_crack": "0.35 -> P 0.58 R 0.16 per box (crack_conf covers alligator_crack and crack; vision only, no jolt rule)",
+  "high_conf": 0.35,
+  "medium_conf": 0.10,
+  "crack_conf": 0.35,
+  "vision_conf": 0.35
+}

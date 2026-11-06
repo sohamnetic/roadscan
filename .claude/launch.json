@@ -15,7 +15,7 @@
       "runtimeExecutable": "C:/Users/lenovo/AppData/Local/Microsoft/WindowsApps/python.exe",
       "runtimeArgs": [
         "-c",
-        "import sys; sys.path.insert(0, 'D:/pothole_mapping/roadscan/pipeline'); from roadscan.__main__ import main; main(['serve', '--db', 'C:/Users/lenovo/AppData/Local/Temp/claude/0f87b79535d9c4f4/c821c086-bffc-4497-acb2-376426b3dbb4/scratchpad/capture_test/test.db', '--uploads', 'C:/Users/lenovo/AppData/Local/Temp/claude/0f87b79535d9c4f4/c821c086-bffc-4497-acb2-376426b3dbb4/scratchpad/capture_test/uploads', '--weights', 'D:/pothole_mapping/models/roadscan_rdd_india_y11m.pt', '--config', 'D:/pothole_mapping/models/roadscan_rdd_india_y11m.fusion.json', '--port', '8010'])"
+        "import sys; sys.path.insert(0, 'D:/pothole_mapping/roadscan/pipeline'); from roadscan.__main__ import main; main(['serve', '--db', 'C:/Users/lenovo/AppData/Local/Temp/claude/0f87b79535d9c4f4/c821c086-bffc-4497-acb2-376426b3dbb4/scratchpad/capture_test/test.db', '--uploads', 'C:/Users/lenovo/AppData/Local/Temp/claude/0f87b79535d9c4f4/c821c086-bffc-4497-acb2-376426b3dbb4/scratchpad/capture_test/uploads', '--weights', 'D:/pothole_mapping/models/roadscan_rdd_india_v2_y11m_736.pt', '--config', 'D:/pothole_mapping/models/roadscan_rdd_india_v2_y11m_736.fusion.json', '--port', '8010'])"
       ],
       "port": 8010
     }

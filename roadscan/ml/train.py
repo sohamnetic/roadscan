@@ -71,9 +71,11 @@ def _report(args) -> None:
     print("\nValidation (best.pt)")
     print(f"  mAP50     {metrics.box.map50:.3f}")
     print(f"  mAP50-95  {metrics.box.map:.3f}")
-    for i, name in metrics.names.items():
+    # class_result takes a position among the classes present in val, not a class id
+    # (our shared 7-class list has classes RDD never labels).
+    for i, k in enumerate(metrics.box.ap_class_index):
         p, r, ap50, ap = metrics.box.class_result(i)
-        print(f"  {name:20s} P {p:.3f}  R {r:.3f}  AP50 {ap50:.3f}")
+        print(f"  {metrics.names[int(k)]:20s} P {p:.3f}  R {r:.3f}  AP50 {ap50:.3f}")
 
     out = Path(args.models_dir) / f"roadscan_{args.name}.pt"
     out.parent.mkdir(parents=True, exist_ok=True)
